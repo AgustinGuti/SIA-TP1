@@ -27,17 +27,21 @@ class Coordinate:
     def __str__(self):
         return self.__repr__()
     
+    def __lt__(self, other):
+        return self.row < other.row or (self.row == other.row and self.column < other.column)
+
     def move(self, direction):
         return Coordinate(self.row + direction[0], self.column + direction[1])
 
 class GridData:
-    def __init__(self, grid, player_position, boxes_positions):
+    def __init__(self, grid, player_position, boxes_positions, objectives_positions):
         self.grid = grid
         self.player_position = player_position
         self.boxes_positions = boxes_positions
+        self.objective_positions = objectives_positions
 
     def copy(self):
-        return GridData(self.grid, self.player_position, self.boxes_positions)
+        return GridData(self.grid, self.player_position, self.boxes_positions, self.objective_positions)
     
     def __str__(self) -> str:
         string = ""
@@ -79,6 +83,7 @@ def load_grid_from_file(file_path):
         grid = []
         player_position = None
         boxes_positions = []
+        objectives_positions = []
         for line in data['grid']:
             row = []
             for char in line:
@@ -89,12 +94,13 @@ def load_grid_from_file(file_path):
                     row.append(GridElement.EMPTY)
                 elif char == '.':
                     row.append(GridElement.OBJECTIVE)
+                    objectives_positions.append(Coordinate(len(grid), len(row)))
                 elif char == '$':
                     boxes_positions.append(Coordinate(len(grid), len(row)))
                     row.append(GridElement.EMPTY)
                 else:
                     row.append(GridElement.EMPTY)
             grid.append(row)
-        data = GridData(grid, player_position, boxes_positions)
+        data = GridData(grid, player_position, boxes_positions, objectives_positions)
         # validate_grid(data)
         return data

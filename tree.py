@@ -1,8 +1,10 @@
 
 class NodeValue:
-    def __init__(self, player_position, boxes_position: list, direction):
+    def __init__(self, player_position, boxes_position: list, direction, heuristic=0, depth=0):
         self.player_position = player_position
         self.boxes_positions = boxes_position
+        self.heuristic = heuristic
+        self.depth = depth
         self.direction = direction
 
     def __str__(self) -> str:
