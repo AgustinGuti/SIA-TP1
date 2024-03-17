@@ -200,6 +200,8 @@ def bfs_step(grid_data: GridData, data: TreeData):
 def is_solution(grid, boxes_positions, player_position):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
 
+def calculate_heuristic(grid_data: GridData):
+    return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in grid_data.objective_positions]) for box in grid_data.boxes_positions])
 
 def main():
     grid_data = load_grid_from_file('grid.json')
