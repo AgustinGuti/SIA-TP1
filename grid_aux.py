@@ -30,6 +30,9 @@ class Coordinate:
     def move(self, direction):
         return Coordinate(self.row + direction[0], self.column + direction[1])
 
+    def __lt__(self, other):
+        return (self.row, self.column) < (other.row, other.column)
+
 class GridData:
     def __init__(self, grid, player_position, boxes_positions):
         self.grid = grid
