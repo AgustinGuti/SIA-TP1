@@ -110,7 +110,7 @@ class Sokoban(arcade.Window):
         if self.time_since_last_move >= 0.01:  # half a second has passed  
 
             if not self.showcase:
-                step_result = bfs_step(self.grid_data, self.explore_data)
+                step_result = greedy_step(self.grid_data, self.explore_data)
                 new_position = step_result[0]
                 self.grid_data.player_position = new_position.value.player_position
                 self.grid_data.boxes_positions = new_position.value.boxes_positions
@@ -173,7 +173,8 @@ def explore_node(node, grid_data):
     for direction in Direction:        
         result = move_player(direction, grid_data)
         if result.moved:
-            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction)))
+            heuristic = calculate_heuristic(objective_positions=grid_data.objective_positions, boxes_positions=result.boxes_positions)
+            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction, heuristic)))
     return node
     
 # Perform a step in the BFS algorithm
@@ -196,12 +197,33 @@ def bfs_step(grid_data: GridData, data: TreeData):
             data.visited.add(child_state)  # Add state to visited set
     return node, False
     
+def greedy_step(grid_data: GridData, data: TreeData):
+    node = data.queue.pop(0)
+    if is_solution(grid_data.grid, node.value.boxes_positions, node.value.player_position):
+        return node, True
+    aux_grid_data = grid_data.copy()
+    aux_grid_data.player_position = node.value.player_position
+    aux_grid_data.boxes_positions = node.value.boxes_positions
+    explore_node(node, aux_grid_data)
+    data.expanded_node_count += 1
+    data.frontier_node_count -= 1
+    for child in node.children:
+        # TODO hash
+        child_state = (child.value.player_position, tuple(sorted(child.value.boxes_positions)))
+        child_grid_data = grid_data.copy()
+        if child_state not in data.visited:  # Check if state has been visited
+            data.queue.append(child)
+            data.frontier_node_count += 1
+            data.visited.add(child_state)  # Add state to visited set
+    data.queue.sort(key=lambda x: x.value.heuristic)
+    return node, False
+
 # Decide if the game has been solved
 def is_solution(grid, boxes_positions, player_position):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
 
-def calculate_heuristic(grid_data: GridData):
-    return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in grid_data.objective_positions]) for box in grid_data.boxes_positions])
+def calculate_heuristic(objective_positions, boxes_positions):
+        return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
 
 def main():
     grid_data = load_grid_from_file('grid.json')
