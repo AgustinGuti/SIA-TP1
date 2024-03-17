@@ -39,6 +39,22 @@ class GridData:
     def copy(self):
         return GridData(self.grid, self.player_position, self.boxes_positions)
     
+    def __str__(self) -> str:
+        string = ""
+        for row in self.grid:
+            for cell in row:
+                if self.player_position == cell:
+                    string += "@"
+                elif cell in self.boxes_positions:
+                    string += "$"
+                elif cell == GridElement.OBJECTIVE:
+                    string += "."
+                elif cell == GridElement.FILLED:
+                    string += "#"
+                else:
+                    string += " "
+            string += "\n"
+        return string
 
 def validate_grid(grid_data):
     row_count = len(grid_data.grid)

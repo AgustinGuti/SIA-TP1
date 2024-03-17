@@ -84,10 +84,10 @@ class Sokoban(arcade.Window):
                     color = arcade.color.GREEN
                     shape = arcade.draw_rectangle_filled
                 elif self.grid_data.grid[row][column] == GridElement.FILLED:
-                    color = arcade.color.BLACK
+                    color = arcade.color.WHITE
                     shape = arcade.draw_rectangle_filled
                 else:
-                    color = arcade.color.WHITE
+                    color = arcade.color.BLACK
                     shape = arcade.draw_rectangle_filled
 
                 # Do the math to figure out where the box is
@@ -104,6 +104,8 @@ class Sokoban(arcade.Window):
             return
 
         return super().update(delta_time)
+
+
 
 
 def main():
