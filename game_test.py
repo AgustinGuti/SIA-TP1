@@ -42,9 +42,14 @@ SCREEN_TITLE = "Sokoban"
 with open('config.json') as f:
     config = json.load(f)
 
+allowed_algorithms = ['bfs', 'a_star', 'greedy']
+if config['algorithm'] not in allowed_algorithms:
+    raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
+
 sorting_options = {
     'bfs': None,
-    'a_star': lambda x: (x.value.heuristic + x.value.depth/100, x.value.heuristic)
+    'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
+    'greedy': lambda x: x.value.heuristic
 }
 
 class Sokoban(arcade.Window):
@@ -177,7 +182,7 @@ def execute_step(grid_data: GridData, data: TreeData):
     grid_data.boxes_positions = new_position.value.boxes_positions
 
     if step_result[1]:
-        print("Solution found")
+        print(f"Solution found with '{config['algorithm']}' algorithm")
         print(data)
         print(f"Route depth: {new_position.value.depth}")
         route = []
@@ -215,7 +220,7 @@ def algorithm_step(grid_data: GridData, data: TreeData):
         data.frontier.sort(key=sorting_options[config['algorithm']])
 
     return node, False
-
+    
 # Decide if the game has been solved
 def is_solution(grid, boxes_positions):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
@@ -225,12 +230,12 @@ def calculate_heuristic(grid, objective_positions, boxes_positions, player_posit
     for box in boxes_positions:
         if grid[box.row][box.column] == GridElement.OBJECTIVE:
             continue
-        filled_sides = 0
+        filled_sides = {direction: False for direction in Direction}
         for direction in Direction:
             if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
-                filled_sides += 1
-        if filled_sides >= 2:
-            return float('inf')
+                filled_sides[direction] = True
+        if (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT]):
+            base_value = float('inf')
     return base_value
 
 
