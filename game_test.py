@@ -14,10 +14,10 @@ class Direction(Enum):
 MoveResult = namedtuple('MoveResult', ['moved', 'new_position', 'boxes_positions'])
 
 class TreeData:
-    def __init__(self, queue, expanded_node_count, frontier_node_count):
+    def __init__(self, frontier, expanded_node_count, frontier_node_count):
         self.expanded_node_count = expanded_node_count
         self.frontier_node_count = frontier_node_count
-        self.queue = queue
+        self.frontier = frontier
         self.visited = set()
 
     def __str__(self) -> str:
@@ -59,7 +59,7 @@ class Sokoban(arcade.Window):
         self.time_since_last_move = 0
         self.showcase = showcase
 
-        self.explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None))], 0, 1)
+        self.explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, calculate_heuristic(grid_data.objective_positions, grid_data.boxes_positions), 0))], 0, 1)
 
         self.step = 0
 
@@ -110,7 +110,7 @@ class Sokoban(arcade.Window):
         if self.time_since_last_move >= 0.01:  # half a second has passed  
 
             if not self.showcase:
-                step_result = bfs_step(self.grid_data, self.explore_data)
+                step_result = a_star_step(self.grid_data, self.explore_data)
                 new_position = step_result[0]
                 self.grid_data.player_position = new_position.value.player_position
                 self.grid_data.boxes_positions = new_position.value.boxes_positions
@@ -118,6 +118,7 @@ class Sokoban(arcade.Window):
                 if step_result[1]:
                     print("Solution found")
                     print(self.explore_data)
+                    print(f"Route depth: {new_position.value.depth}")
                     route = []
                     while new_position.parent:
                         route.append(new_position.value.direction.name)
@@ -126,7 +127,7 @@ class Sokoban(arcade.Window):
                     self.paused = True
                     return
                 
-                if self.explore_data.queue == []:
+                if self.explore_data.frontier == []:
                     print("No solution found")
                     self.paused = True
                     return
@@ -173,12 +174,13 @@ def explore_node(node, grid_data):
     for direction in Direction:        
         result = move_player(direction, grid_data)
         if result.moved:
-            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction)))
+            heuristic = calculate_heuristic(objective_positions=grid_data.objective_positions, boxes_positions=result.boxes_positions)
+            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction, heuristic, node.value.depth + 1)))
     return node
     
 # Perform a step in the BFS algorithm
 def bfs_step(grid_data: GridData, data: TreeData):
-    node = data.queue.pop(0)
+    node = data.frontier.pop(0)
     if is_solution(grid_data.grid, node.value.boxes_positions, node.value.player_position):
         return node, True
     aux_grid_data = grid_data.copy()
@@ -191,7 +193,7 @@ def bfs_step(grid_data: GridData, data: TreeData):
         # TODO hash
         child_state = (child.value.player_position, tuple(sorted(child.value.boxes_positions)))
         if child_state not in data.visited:  # Check if state has been visited
-            data.queue.append(child)
+            data.frontier.append(child)
             data.frontier_node_count += 1
             data.visited.add(child_state)  # Add state to visited set
     return node, False
@@ -200,8 +202,29 @@ def bfs_step(grid_data: GridData, data: TreeData):
 def is_solution(grid, boxes_positions, player_position):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
 
-def calculate_heuristic(grid_data: GridData):
-    return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in grid_data.objective_positions]) for box in grid_data.boxes_positions])
+def calculate_heuristic(objective_positions, boxes_positions):
+    # TODO add corners
+    return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
+
+def a_star_step(grid_data: GridData, data: TreeData):
+    node = data.frontier.pop(0)
+    if is_solution(grid_data.grid, node.value.boxes_positions, node.value.player_position):
+        return node, True
+    aux_grid_data = grid_data.copy()
+    aux_grid_data.player_position = node.value.player_position
+    aux_grid_data.boxes_positions = node.value.boxes_positions
+    explore_node(node, aux_grid_data)
+    data.expanded_node_count += 1
+    data.frontier_node_count -= 1
+    for child in node.children:
+        # TODO hash
+        child_state = (child.value.player_position, tuple(sorted(child.value.boxes_positions)))
+        if child_state not in data.visited:  # Check if state has been visited
+            data.frontier.append(child)
+            data.frontier_node_count += 1
+            data.visited.add(child_state)  # Add state to visited set
+    data.frontier.sort(key=lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic))
+    return node, False
 
 def main():
     grid_data = load_grid_from_file('grid.json')

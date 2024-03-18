@@ -8,7 +8,7 @@ class NodeValue:
         self.direction = direction
 
     def __str__(self) -> str:
-        return f"Player: {self.player_position}, Boxes: {self.boxes_positions}"
+        return f"Player: {self.player_position}, Boxes: {self.boxes_positions}, Heuristic: {self.heuristic}, Depth: {self.depth}"
     
     def __repr__(self) -> str:
         return self.__str__()
