@@ -1,0 +1,8 @@
+{
+    "algorithm": "a_star",
+    "graphic": false,
+    "replay": {
+        "enabled": false,
+        "speed": 0.5
+    }
+}
