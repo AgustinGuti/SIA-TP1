@@ -42,12 +42,13 @@ SCREEN_TITLE = "Sokoban"
 with open('config.json') as f:
     config = json.load(f)
 
-allowed_algorithms = ['bfs', 'a_star', 'greedy']
+allowed_algorithms = ['bfs', 'dfs', 'a_star', 'greedy']
 if config['algorithm'] not in allowed_algorithms:
     raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
 
 sorting_options = {
     'bfs': None,
+    'dfs': None,
     'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
     'greedy': lambda x: x.value.heuristic
 }
@@ -201,7 +202,15 @@ def execute_step(grid_data: GridData, data: TreeData):
     return False
     
 def algorithm_step(grid_data: GridData, data: TreeData):
-    node = data.frontier.pop(0)
+    if config['algorithm'] == 'bfs':
+        # Explore the oldest nodes
+        node = data.frontier.pop(0)
+    elif config['algorithm'] == 'dfs':
+        # Explore the most recently added nodes
+        node = data.frontier.pop()
+    else:
+        raise ValueError(f"Unknown algorithm: {config['algorithm']}")
+
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
     aux_grid_data = grid_data.copy()

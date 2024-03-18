@@ -1,5 +1,5 @@
 {
-    "algorithm": "a_star",
+    "algorithm": "dfs",
     "graphic": false,
     "replay": {
         "enabled": false,
