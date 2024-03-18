@@ -7,8 +7,14 @@ class NodeValue:
         self.depth = depth
         self.direction = direction
 
+    def __eq__(self, other):
+        return self.player_position == other.player_position and self.boxes_positions == other.boxes_positions
+    
+    def __hash__(self):
+        return hash((self.player_position, tuple(sorted(self.boxes_positions))))
+
     def __str__(self) -> str:
-        return f"Player: {self.player_position}, Boxes: {self.boxes_positions}"
+        return f"Player: {self.player_position}, Boxes: {self.boxes_positions}, Heuristic: {self.heuristic}, Depth: {self.depth}"
     
     def __repr__(self) -> str:
         return self.__str__()
@@ -31,3 +37,9 @@ class Node:
     
     def __str__(self):
         return self.__repr__()
+    
+    def __eq__(self, other):
+        return self.value.__hash__() == other.value.__hash__()
+    
+    def __hash__(self):
+        return self.value.__hash__()

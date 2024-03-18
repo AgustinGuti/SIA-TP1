@@ -1,5 +1,6 @@
 import arcade
 from enum import Enum
+import json
 from collections import namedtuple
 from tree import Node, NodeValue
 from grid_aux import load_grid_from_file, GridData, GridElement, Coordinate
@@ -14,10 +15,10 @@ class Direction(Enum):
 MoveResult = namedtuple('MoveResult', ['moved', 'new_position', 'boxes_positions'])
 
 class TreeData:
-    def __init__(self, queue, expanded_node_count, frontier_node_count):
+    def __init__(self, frontier, expanded_node_count, frontier_node_count):
         self.expanded_node_count = expanded_node_count
         self.frontier_node_count = frontier_node_count
-        self.queue = queue
+        self.frontier = frontier
         self.visited = set()
 
     def __str__(self) -> str:
@@ -36,7 +37,20 @@ HEIGHT = 30
 MARGIN = 5
 
 # Do the math to figure out our screen dimensions
-SCREEN_TITLE = "Example Game"
+SCREEN_TITLE = "Sokoban"
+
+with open('config.json') as f:
+    config = json.load(f)
+
+allowed_algorithms = ['bfs', 'a_star', 'greedy']
+if config['algorithm'] not in allowed_algorithms:
+    raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
+
+sorting_options = {
+    'bfs': None,
+    'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
+    'greedy': lambda x: x.value.heuristic
+}
 
 class Sokoban(arcade.Window):
     def __init__(self, title, grid_data: GridData, showcase=False):
@@ -59,10 +73,10 @@ class Sokoban(arcade.Window):
         self.time_since_last_move = 0
         self.showcase = showcase
 
-        self.explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None))], 0, 1)
+        heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
+        self.explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
 
         self.step = 0
-
 
         arcade.set_background_color(arcade.color.BLACK)
 
@@ -107,38 +121,22 @@ class Sokoban(arcade.Window):
         # Llamar al algoritmo aca
         self.time_since_last_move += delta_time
     
-        if self.time_since_last_move >= 0.01:  # half a second has passed  
+        move_delta = config["replay"]["speed"] if config["replay"]["enabled"] else 0.01
+
+        if self.time_since_last_move >= move_delta:
 
             if not self.showcase:
-                step_result = greedy_step(self.grid_data, self.explore_data)
-                new_position = step_result[0]
-                self.grid_data.player_position = new_position.value.player_position
-                self.grid_data.boxes_positions = new_position.value.boxes_positions
-
-                if step_result[1]:
-                    print("Solution found")
-                    print(self.explore_data)
-                    route = []
-                    while new_position.parent:
-                        route.append(new_position.value.direction.name)
-                        new_position = new_position.parent
-                    print(route[::-1])
-                    self.paused = True
-                    return
-                
-                if self.explore_data.queue == []:
-                    print("No solution found")
+                if execute_step(self.grid_data, self.explore_data):
                     self.paused = True
                     return
             else:
-                # route for base grid.json
-                route = ['LEFT', 'RIGHT', 'RIGHT', 'LEFT', 'UP', 'UP', 'LEFT', 'LEFT', 'DOWN', 'LEFT', 'DOWN', 'DOWN', 'RIGHT', 'UP', 'UP', 'UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'LEFT', 'LEFT', 'LEFT', 'UP', 'UP', 'RIGHT', 'UP', 'RIGHT', 'UP', 'RIGHT', 'RIGHT', 'RIGHT', 'LEFT', 'DOWN', 'DOWN', 'RIGHT', 'RIGHT', 'UP', 'UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'RIGHT', 'RIGHT', 'DOWN', 'RIGHT', 'DOWN', 'DOWN', 'LEFT', 'UP', 'UP', 'UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'RIGHT', 'RIGHT', 'RIGHT', 'RIGHT', 'UP', 'UP', 'LEFT', 'UP', 'LEFT', 'UP', 'LEFT', 'LEFT', 'LEFT', 'RIGHT', 'DOWN', 'DOWN', 'LEFT', 'LEFT', 'UP', 'UP']
-
-                if self.step < len(route):
-                    result = move_player(Direction[route[self.step]], self.grid_data)
-                    self.grid_data.player_position = result.new_position
-                    self.grid_data.boxes_positions = result.boxes_positions
-                    self.step += 1
+                with open('route.json') as f:
+                    route = json.load(f)
+                    if self.step < len(route):
+                        result = move_player(Direction[route[self.step]], self.grid_data)
+                        self.grid_data.player_position = result.new_position
+                        self.grid_data.boxes_positions = result.boxes_positions
+                        self.step += 1
 
             self.time_since_last_move = 0
 
@@ -173,63 +171,86 @@ def explore_node(node, grid_data):
     for direction in Direction:        
         result = move_player(direction, grid_data)
         if result.moved:
-            heuristic = calculate_heuristic(objective_positions=grid_data.objective_positions, boxes_positions=result.boxes_positions)
-            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction, heuristic)))
+            heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, result.boxes_positions, result.new_position)
+            node.add_child(Node(NodeValue(result.new_position, result.boxes_positions, direction, heuristic, node.value.depth + 1)))
     return node
-    
-# Perform a step in the BFS algorithm
-def bfs_step(grid_data: GridData, data: TreeData):
-    node = data.queue.pop(0)
-    if is_solution(grid_data.grid, node.value.boxes_positions, node.value.player_position):
-        return node, True
-    aux_grid_data = grid_data.copy()
-    aux_grid_data.player_position = node.value.player_position
-    aux_grid_data.boxes_positions = node.value.boxes_positions
-    explore_node(node, aux_grid_data)
-    data.expanded_node_count += 1
-    data.frontier_node_count -= 1
-    for child in node.children:
-        # TODO hash
-        child_state = (child.value.player_position, tuple(sorted(child.value.boxes_positions)))
-        if child_state not in data.visited:  # Check if state has been visited
-            data.queue.append(child)
-            data.frontier_node_count += 1
-            data.visited.add(child_state)  # Add state to visited set
-    return node, False
-    
-def greedy_step(grid_data: GridData, data: TreeData):
-    node = data.queue.pop(0)
-    if is_solution(grid_data.grid, node.value.boxes_positions, node.value.player_position):
-        return node, True
-    aux_grid_data = grid_data.copy()
-    aux_grid_data.player_position = node.value.player_position
-    aux_grid_data.boxes_positions = node.value.boxes_positions
-    explore_node(node, aux_grid_data)
-    data.expanded_node_count += 1
-    data.frontier_node_count -= 1
-    for child in node.children:
-        # TODO hash
-        child_state = (child.value.player_position, tuple(sorted(child.value.boxes_positions)))
-        child_grid_data = grid_data.copy()
-        if child_state not in data.visited:  # Check if state has been visited
-            data.queue.append(child)
-            data.frontier_node_count += 1
-            data.visited.add(child_state)  # Add state to visited set
-    data.queue.sort(key=lambda x: x.value.heuristic)
-    return node, False
 
+def execute_step(grid_data: GridData, data: TreeData):
+    step_result = algorithm_step(grid_data, data)
+    new_position = step_result[0]
+    grid_data.player_position = new_position.value.player_position
+    grid_data.boxes_positions = new_position.value.boxes_positions
+
+    if step_result[1]:
+        print(f"Solution found with '{config['algorithm']}' algorithm")
+        print(data)
+        print(f"Route depth: {new_position.value.depth}")
+        route = []
+        while new_position.parent:
+            route.append(new_position.value.direction.name)
+            new_position = new_position.parent
+        print(route[::-1])
+        with open('route.json', 'w') as f:
+            json.dump(route[::-1], f)
+        return True
+    
+    if data.frontier == []:
+        print("No solution found")
+        return True
+
+    return False
+    
+def algorithm_step(grid_data: GridData, data: TreeData):
+    node = data.frontier.pop(0)
+    if is_solution(grid_data.grid, node.value.boxes_positions):
+        return node, True
+    aux_grid_data = grid_data.copy()
+    aux_grid_data.player_position = node.value.player_position
+    aux_grid_data.boxes_positions = node.value.boxes_positions
+    explore_node(node, aux_grid_data)
+    data.expanded_node_count += 1
+    data.frontier_node_count -= 1
+    for child in node.children:
+        if child not in data.visited:  # Check if state has been visited
+            data.frontier.append(child)
+            data.frontier_node_count += 1
+            data.visited.add(child)  # Add state to visited set
+
+    if sorting_options[config['algorithm']]:
+        data.frontier.sort(key=sorting_options[config['algorithm']])
+
+    return node, False
+    
 # Decide if the game has been solved
-def is_solution(grid, boxes_positions, player_position):
+def is_solution(grid, boxes_positions):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
 
-def calculate_heuristic(objective_positions, boxes_positions):
-        return sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
+def calculate_heuristic(grid, objective_positions, boxes_positions, player_position):
+    base_value = sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
+    for box in boxes_positions:
+        if grid[box.row][box.column] == GridElement.OBJECTIVE:
+            continue
+        filled_sides = {direction: False for direction in Direction}
+        for direction in Direction:
+            if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
+                filled_sides[direction] = True
+        if (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT]):
+            base_value = float('inf')
+    return base_value
+
 
 def main():
     grid_data = load_grid_from_file('grid.json')
 
-    Sokoban(SCREEN_TITLE, grid_data)
-    arcade.run()
+    if config["graphic"]:
+        Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
+        arcade.run()
+    else :
+        heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
+        explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
+        while not execute_step(grid_data, explore_data):
+            pass
+
 
 if __name__ == "__main__":
     main()
