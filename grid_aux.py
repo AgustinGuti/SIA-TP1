@@ -37,14 +37,15 @@ class Coordinate:
         return (self.row, self.column) < (other.row, other.column)
 
 class GridData:
-    def __init__(self, grid, player_position, boxes_positions, objectives_positions):
+    def __init__(self, grid, player_position, boxes_positions, objectives_positions, grid_name = None):
+        self.name = grid_name
         self.grid = grid
         self.player_position = player_position
         self.boxes_positions = boxes_positions
         self.objective_positions = objectives_positions
 
     def copy(self):
-        return GridData(self.grid, self.player_position, self.boxes_positions, self.objective_positions)
+        return GridData(self.grid, self.player_position, self.boxes_positions, self.objective_positions, self.name)
     
     def __str__(self) -> str:
         string = ""
@@ -80,30 +81,28 @@ def validate_grid(grid_data):
         raise ValueError("There must be the same number of objectives as boxes in the grid")
     return True
 
-def load_grid_from_file(file_path):
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-        grid = []
-        player_position = None
-        boxes_positions = []
-        objectives_positions = []
-        for line in data['grid']:
-            row = []
-            for char in line:
-                if char == '#':
-                    row.append(GridElement.FILLED)
-                elif char == '@':
-                    player_position = Coordinate(len(grid), len(row))
-                    row.append(GridElement.EMPTY)
-                elif char == '.':
-                    row.append(GridElement.OBJECTIVE)
-                    objectives_positions.append(Coordinate(len(grid), len(row)))
-                elif char == '$':
-                    boxes_positions.append(Coordinate(len(grid), len(row)))
-                    row.append(GridElement.EMPTY)
-                else:
-                    row.append(GridElement.EMPTY)
-            grid.append(row)
-        data = GridData(grid, player_position, boxes_positions, objectives_positions)
-        # validate_grid(data)
-        return data
+def load_grid(data):
+    grid = []
+    player_position = None
+    boxes_positions = []
+    objectives_positions = []
+    for line in data['grid']:
+        row = []
+        for char in line:
+            if char == '#':
+                row.append(GridElement.FILLED)
+            elif char == '@':
+                player_position = Coordinate(len(grid), len(row))
+                row.append(GridElement.EMPTY)
+            elif char == '.':
+                row.append(GridElement.OBJECTIVE)
+                objectives_positions.append(Coordinate(len(grid), len(row)))
+            elif char == '$':
+                boxes_positions.append(Coordinate(len(grid), len(row)))
+                row.append(GridElement.EMPTY)
+            else:
+                row.append(GridElement.EMPTY)
+        grid.append(row)
+    data = GridData(grid, player_position, boxes_positions, objectives_positions, data['name'])
+    # validate_grid(data)
+    return data

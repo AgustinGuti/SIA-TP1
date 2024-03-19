@@ -3,7 +3,7 @@ from enum import Enum
 import json
 from collections import namedtuple
 from tree import Node, NodeValue
-from grid_aux import load_grid_from_file, GridData, GridElement, Coordinate
+from grid_aux import load_grid, GridData, GridElement, Coordinate
 
 # Define directions
 class Direction(Enum):    
@@ -182,6 +182,7 @@ def execute_step(grid_data: GridData, data: TreeData):
     grid_data.boxes_positions = new_position.value.boxes_positions
 
     if step_result[1]:
+        print(f"Grid: {grid_data.name}")
         print(f"Solution found with '{config['algorithm']}' algorithm")
         print(data)
         print(f"Route depth: {new_position.value.depth}")
@@ -189,7 +190,8 @@ def execute_step(grid_data: GridData, data: TreeData):
         while new_position.parent:
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
-        print(route[::-1])
+        # print(route[::-1])
+        print()
         with open('route.json', 'w') as f:
             json.dump(route[::-1], f)
         return True
@@ -240,16 +242,18 @@ def calculate_heuristic(grid, objective_positions, boxes_positions, player_posit
 
 
 def main():
-    grid_data = load_grid_from_file('grid.json')
-
-    if config["graphic"]:
-        Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
-        arcade.run()
-    else :
-        heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
-        explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
-        while not execute_step(grid_data, explore_data):
-            pass
+    with open('grid.json') as f:
+        grids = json.load(f)['active']
+        for grid in grids:
+            grid_data = load_grid(grid)
+            if config["graphic"]:
+                Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
+                arcade.run()
+            else :
+                heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
+                explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
+                while not execute_step(grid_data, explore_data):
+                    pass
 
 
 if __name__ == "__main__":
