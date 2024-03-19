@@ -49,7 +49,7 @@ if config['algorithm'] not in allowed_algorithms:
 
 sorting_options = {
     'bfs': None,
-    'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
+    'a_star': lambda x: (x.value.heuristic + x.value.depth/5, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
     'greedy': lambda x: x.value.heuristic
 }
 
@@ -192,7 +192,6 @@ def execute_step(grid_data: GridData, data: TreeData):
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
         # print(route[::-1])
-        print()
         with open('route.json', 'w') as f:
             json.dump(route[::-1], f)
         return True
@@ -241,12 +240,12 @@ def calculate_heuristic(grid, objective_positions, boxes_positions, player_posit
             base_value = float('inf')
     return base_value
 
-
 def main():
     with open('grid.json') as f:
         grids = json.load(f)['active']
         for grid in grids:
             start_time = time.process_time()
+            last_time = start_time
             grid_data = load_grid(grid)
             if config["graphic"]:
                 Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
@@ -255,8 +254,13 @@ def main():
                 heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
                 explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
                 while not execute_step(grid_data, explore_data):
+                    current_time = time.process_time()
+                    if (current_time - last_time) > config["print_delta_time"]:
+                        print(f"Time: {current_time:.2f}")
+                        last_time = current_time
                     pass
             print(f"Time: {time.process_time() - start_time:.2f}")
+            print("---------------------------------------------------")
 
 
 if __name__ == "__main__":

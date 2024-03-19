@@ -1,6 +1,7 @@
 {
-    "algorithm": "a_star",
+    "algorithm": "greedy",
     "graphic": false,
+    "print_delta_time": 10,
     "replay": {
         "enabled": false,
         "speed": 0.1
