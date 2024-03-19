@@ -43,12 +43,13 @@ SCREEN_TITLE = "Sokoban"
 with open('config.json') as f:
     config = json.load(f)
 
-allowed_algorithms = ['bfs', 'a_star', 'greedy']
+allowed_algorithms = ['bfs', 'dfs', 'a_star', 'greedy']
 if config['algorithm'] not in allowed_algorithms:
     raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
 
 sorting_options = {
     'bfs': None,
+    'dfs': None,
     'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
     'greedy': lambda x: x.value.heuristic
 }
@@ -204,9 +205,14 @@ def execute_step(grid_data: GridData, data: TreeData):
     return False
     
 def algorithm_step(grid_data: GridData, data: TreeData):
-    node = data.frontier.pop(0)
+    if config['algorithm'] == 'dfs':
+        node = data.frontier.pop()
+    else:
+        node = data.frontier.pop(0)     
+
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
+    
     aux_grid_data = grid_data.copy()
     aux_grid_data.player_position = node.value.player_position
     aux_grid_data.boxes_positions = node.value.boxes_positions
@@ -216,12 +222,11 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     for child in node.children:
         if child not in data.visited:  # Check if state has been visited
             data.frontier.append(child)
-            data.frontier_node_count += 1
+            data.frontier_node_count += 1                
             data.visited.add(child)  # Add state to visited set
 
     if sorting_options[config['algorithm']]:
         data.frontier.sort(key=sorting_options[config['algorithm']])
-
     return node, False
     
 # Decide if the game has been solved
