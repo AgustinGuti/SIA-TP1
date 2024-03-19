@@ -22,6 +22,7 @@ class TreeData:
         self.visited = set()
         self.depth_limit = depth_limit
         self.root = root
+        self.last_frontier = []
 
     def __str__(self) -> str:
         return f"Expanded nodes: {self.expanded_node_count}, Frontier nodes: {self.frontier_node_count}"
@@ -193,7 +194,7 @@ def execute_step(grid_data: GridData, data: TreeData):
         while new_position.parent:
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
-        print(route[::-1])
+        # print(route[::-1])
         with open('route.json', 'w') as f:
             json.dump(route[::-1], f)
         return True
@@ -205,19 +206,46 @@ def execute_step(grid_data: GridData, data: TreeData):
     return False
     
 def algorithm_step(grid_data: GridData, data: TreeData):
-    if config['algorithm'] == 'bfs':
-        # Explore the oldest nodes
-        node = data.frontier.pop(0)
-    elif config['algorithm'] == 'dfs' or config['algorithm'] == 'iddfs':
-        # Explore the most recently added nodes
-        node = data.frontier.pop()
-    else:
-        raise ValueError(f"Unknown algorithm: {config['algorithm']}")
+    if config['algorithm'] == 'dfs' or config['algorithm'] == 'iddfs':
+        return dfs_step(grid_data, data)
+
+    node = data.frontier.pop(0)     
 
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
     
-    if config['algorithm'] == 'iddfs' and data.depth_limit > 0 and node.value.depth > data.depth_limit:
+    aux_grid_data = grid_data.copy()
+    aux_grid_data.player_position = node.value.player_position
+    aux_grid_data.boxes_positions = node.value.boxes_positions
+    explore_node(node, aux_grid_data)
+    data.expanded_node_count += 1
+    data.frontier_node_count -= 1
+    for child in node.children:
+        if child not in data.visited:  # Check if state has been visited
+            data.frontier.append(child)
+            data.frontier_node_count += 1                
+            data.visited.add(child)  # Add state to visited set
+
+    if sorting_options[config['algorithm']]:
+        data.frontier.sort(key=sorting_options[config['algorithm']])
+    return node, False
+
+def dfs_step(grid_data: GridData, data: TreeData):
+    node = data.frontier.pop()
+
+    if is_solution(grid_data.grid, node.value.boxes_positions):
+        return node, True
+    
+    print(f"Algorithm: {config['algorithm']}, Depth limit: {data.depth_limit}, Depth: {node.value.depth}")
+
+    if config['algorithm'] == 'iddfs' and data.depth_limit > 0 and node.value.depth >= data.depth_limit:
+        data.last_frontier.insert(0, node)
+        if not data.frontier:
+            # Increase depth limit and reset frontier to the start node
+            data.depth_limit += 10
+            data.frontier = [data.root]
+            data.last_frontier.clear()
+            data.visited.clear()
         return node, False
 
     aux_grid_data = grid_data.copy()
@@ -229,16 +257,8 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     for child in node.children:
         if child not in data.visited:  # Check if state has been visited
             data.frontier.append(child)
-            data.frontier_node_count += 1
+            data.frontier_node_count += 1                
             data.visited.add(child)  # Add state to visited set
-
-    if sorting_options[config['algorithm']]:
-        data.frontier.sort(key=sorting_options[config['algorithm']])
-
-    if config['algorithm'] == 'iddfs' and not data.frontier:
-        # Increase depth limit and reset frontier to the start node
-        data.depth_limit += 1
-        data.frontier = [data.root]
     return node, False
     
 # Decide if the game has been solved
@@ -268,7 +288,7 @@ def main():
     else :
         heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
         root_node = Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))
-        explore_data = TreeData([root_node], 0, 1, depth_limit=0, root=root_node)
+        explore_data = TreeData([root_node], 0, 1, depth_limit=1, root=root_node)
         while not execute_step(grid_data, explore_data):
             pass
 
