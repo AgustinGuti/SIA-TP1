@@ -167,3 +167,4 @@ __pycache__/
 my_venv/
 
 route.json
+log*.txt

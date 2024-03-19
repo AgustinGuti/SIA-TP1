@@ -5,6 +5,9 @@ from collections import namedtuple
 from tree import Node, NodeValue
 from grid_aux import load_grid, GridData, GridElement, Coordinate
 import time
+import logging
+from datetime import datetime
+
 
 # Define directions
 class Direction(Enum):    
@@ -183,15 +186,14 @@ def execute_step(grid_data: GridData, data: TreeData):
     grid_data.boxes_positions = new_position.value.boxes_positions
 
     if step_result[1]:
-        print(f"Grid: {grid_data.name}")
-        print(f"Solution found with '{config['algorithm']}' algorithm")
-        print(data)
-        print(f"Route depth: {new_position.value.depth}")
+        message = f"Grid: {grid_data.name}\nSolution found with '{config['algorithm']}' algorithm and heuristic {config['heuristic']}\n{data}\nRoute depth: {new_position.value.depth}"
+        print(message)
+        logging.info(message)
         route = []
         while new_position.parent:
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
-        # print(route[::-1])
+        logging.info(route[::-1])
         with open('route.json', 'w') as f:
             json.dump(route[::-1], f)
         return True
@@ -296,6 +298,9 @@ def calculate_third_heuristic(grid, objective_positions, boxes_positions, player
     return base_value
 
 def main():
+    log_filename = f"log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
+
     with open('grid.json') as f:
         grids = json.load(f)['active']
         for grid in grids:
@@ -311,11 +316,13 @@ def main():
                 while not execute_step(grid_data, explore_data):
                     current_time = time.process_time()
                     if (current_time - last_time) > config["print_delta_time"]:
-                        print(f"Time: {current_time:.2f}")
+                        print(f"Time: {current_time - start_time:.2f}")
                         last_time = current_time
                     pass
             print(f"Time: {time.process_time() - start_time:.2f}")
+            logging.info(f"Time: {time.process_time() - start_time:.2f}")
             print("---------------------------------------------------")
+            logging.info("---------------------------------------------------")
 
 
 if __name__ == "__main__":
