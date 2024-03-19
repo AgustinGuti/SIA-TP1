@@ -16,6 +16,9 @@ class NodeValue:
     def __str__(self) -> str:
         return f"Player: {self.player_position}, Boxes: {self.boxes_positions}, Heuristic: {self.heuristic}, Depth: {self.depth}"
     
+    def __lt__(self, other):
+        return self.heuristic < other.heuristic
+    
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -34,6 +37,9 @@ class Node:
         for child in self.children:
             ret += child.__repr__(level + 1)
         return ret
+    
+    def __lt__ (self, other):
+        return self.value < other.value
     
     def __str__(self):
         return self.__repr__()

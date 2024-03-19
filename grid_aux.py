@@ -35,6 +35,9 @@ class Coordinate:
 
     def __lt__(self, other):
         return (self.row, self.column) < (other.row, other.column)
+    
+    def copy(self):
+        return Coordinate(self.row, self.column)
 
 class GridData:
     def __init__(self, grid, player_position, boxes_positions, objectives_positions, grid_name = None):
