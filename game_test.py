@@ -15,11 +15,13 @@ class Direction(Enum):
 MoveResult = namedtuple('MoveResult', ['moved', 'new_position', 'boxes_positions'])
 
 class TreeData:
-    def __init__(self, frontier, expanded_node_count, frontier_node_count):
+    def __init__(self, frontier, expanded_node_count, frontier_node_count, depth_limit=0, root=None):
         self.expanded_node_count = expanded_node_count
         self.frontier_node_count = frontier_node_count
         self.frontier = frontier
         self.visited = set()
+        self.depth_limit = depth_limit
+        self.root = root
 
     def __str__(self) -> str:
         return f"Expanded nodes: {self.expanded_node_count}, Frontier nodes: {self.frontier_node_count}"
@@ -42,13 +44,14 @@ SCREEN_TITLE = "Sokoban"
 with open('config.json') as f:
     config = json.load(f)
 
-allowed_algorithms = ['bfs', 'dfs', 'a_star', 'greedy']
+allowed_algorithms = ['bfs', 'dfs', 'iddfs', 'a_star', 'greedy']
 if config['algorithm'] not in allowed_algorithms:
     raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
 
 sorting_options = {
     'bfs': None,
     'dfs': None,
+    'iddfs': None,
     'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
     'greedy': lambda x: x.value.heuristic
 }
@@ -205,7 +208,7 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     if config['algorithm'] == 'bfs':
         # Explore the oldest nodes
         node = data.frontier.pop(0)
-    elif config['algorithm'] == 'dfs':
+    elif config['algorithm'] == 'dfs' or config['algorithm'] == 'iddfs':
         # Explore the most recently added nodes
         node = data.frontier.pop()
     else:
@@ -213,6 +216,10 @@ def algorithm_step(grid_data: GridData, data: TreeData):
 
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
+    
+    if config['algorithm'] == 'iddfs' and data.depth_limit > 0 and node.value.depth > data.depth_limit:
+        return node, False
+
     aux_grid_data = grid_data.copy()
     aux_grid_data.player_position = node.value.player_position
     aux_grid_data.boxes_positions = node.value.boxes_positions
@@ -228,6 +235,10 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     if sorting_options[config['algorithm']]:
         data.frontier.sort(key=sorting_options[config['algorithm']])
 
+    if config['algorithm'] == 'iddfs' and not data.frontier:
+        # Increase depth limit and reset frontier to the start node
+        data.depth_limit += 1
+        data.frontier = [data.root]
     return node, False
     
 # Decide if the game has been solved
@@ -256,7 +267,8 @@ def main():
         arcade.run()
     else :
         heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
-        explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
+        root_node = Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))
+        explore_data = TreeData([root_node], 0, 1, depth_limit=0, root=root_node)
         while not execute_step(grid_data, explore_data):
             pass
 
