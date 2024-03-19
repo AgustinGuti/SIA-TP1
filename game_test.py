@@ -4,6 +4,7 @@ import json
 from collections import namedtuple
 from tree import Node, NodeValue
 from grid_aux import load_grid, GridData, GridElement, Coordinate
+import time
 
 # Define directions
 class Direction(Enum):    
@@ -245,6 +246,7 @@ def main():
     with open('grid.json') as f:
         grids = json.load(f)['active']
         for grid in grids:
+            start_time = time.process_time()
             grid_data = load_grid(grid)
             if config["graphic"]:
                 Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
@@ -254,6 +256,7 @@ def main():
                 explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
                 while not execute_step(grid_data, explore_data):
                     pass
+            print(f"Time: {time.process_time() - start_time:.2f}")
 
 
 if __name__ == "__main__":
