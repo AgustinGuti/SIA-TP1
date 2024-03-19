@@ -7,7 +7,8 @@ from grid_aux import load_grid, GridData, GridElement, Coordinate
 import time
 import logging
 from datetime import datetime
-
+from collections import deque
+import heapq
 
 # Define directions
 class Direction(Enum):    
@@ -78,7 +79,7 @@ class Sokoban(arcade.Window):
         self.showcase = showcase
 
         heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
-        self.explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
+        self.explore_data = TreeData(deque([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))]), 0, 1)
 
         self.step = 0
 
@@ -158,7 +159,7 @@ def can_move_into_cell(direction, grid_data: GridData, current_position: Coordin
 # Move the player. Checks if the player can move into a cell and if there is a box in the cell, if the box can be moved
 # Returns a MoveResult with the new position and the new boxes positions, and a boolean indicating if the player moved
 def move_player(direction: Direction, grid_data: GridData): 
-    new_position = grid_data.player_position.move(direction.value)
+    new_position = grid_data.player_position.copy().move(direction.value)
     if can_move_into_cell(direction, grid_data, grid_data.player_position):
         return MoveResult(True, new_position, grid_data.boxes_positions)
     elif grid_data.boxes_positions.count(new_position) > 0:
@@ -207,26 +208,28 @@ def execute_step(grid_data: GridData, data: TreeData):
 def algorithm_step(grid_data: GridData, data: TreeData):
     if config['algorithm'] == 'dfs':
         node = data.frontier.pop()
+    elif config['algorithm'] == 'bfs':
+        node = data.frontier.popleft()
     else:
-        node = data.frontier.pop(0)     
+        _, _, node = heapq.heappop(data.frontier)
 
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
     
-    aux_grid_data = grid_data.copy()
-    aux_grid_data.player_position = node.value.player_position
-    aux_grid_data.boxes_positions = node.value.boxes_positions
-    explore_node(node, aux_grid_data)
+    explore_node(node, grid_data)
     data.expanded_node_count += 1
     data.frontier_node_count -= 1
     for child in node.children:
         if child not in data.visited:  # Check if state has been visited
-            data.frontier.append(child)
+            if config['algorithm'] == 'dfs':
+                data.frontier.append(child)
+            elif config['algorithm'] == 'bfs':
+                data.frontier.append(child)
+            else:
+                heapq.heappush(data.frontier, (sorting_options[config['algorithm']](child), data.expanded_node_count, child))
             data.frontier_node_count += 1                
             data.visited.add(child)  # Add state to visited set
 
-    if sorting_options[config['algorithm']]:
-        data.frontier.sort(key=sorting_options[config['algorithm']])
     return node, False
     
 # Decide if the game has been solved
@@ -243,18 +246,22 @@ def calculate_heuristic(grid, objective_positions, boxes_positions, player_posit
         return calculate_third_heuristic(grid, objective_positions, boxes_positions, player_position)
     else:
         raise ValueError(f"Invalid heuristic: {config['heuristic']}. Allowed options are 1, 2 and 3.")
+    
+def is_box_in_corner(grid, box):
+    if grid[box.row][box.column] == GridElement.OBJECTIVE:
+            return False
+    filled_sides = {direction: False for direction in Direction}
+    for direction in Direction:
+        if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
+            filled_sides[direction] = True
+    return (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT])
 
 def calculate_first_heuristic(grid, objective_positions, boxes_positions, player_position):
     base_value = sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
     for box in boxes_positions:
-        if grid[box.row][box.column] == GridElement.OBJECTIVE:
-            continue
-        filled_sides = {direction: False for direction in Direction}
-        for direction in Direction:
-            if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
-                filled_sides[direction] = True
-        if (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT]):
+        if is_box_in_corner(grid, box):
             base_value = float('inf')
+            break
     return base_value
 
 def calculate_second_heuristic(grid, objective_positions, boxes_positions, player_position):
@@ -262,6 +269,10 @@ def calculate_second_heuristic(grid, objective_positions, boxes_positions, playe
     objectives_assigned = [False for _ in objective_positions]
 
     for box in boxes_positions:
+        if is_box_in_corner(grid, box):
+            base_value = float('inf')
+            break
+
         min_distance = float('inf')
         min_index = -1
         for i, obj in enumerate(objective_positions):
@@ -274,21 +285,16 @@ def calculate_second_heuristic(grid, objective_positions, boxes_positions, playe
         if min_index != -1:
             objectives_assigned[min_index] = True
         base_value += min_distance
-
-        if grid[box.row][box.column] == GridElement.OBJECTIVE:
-            continue
-        filled_sides = {direction: False for direction in Direction}
-        for direction in Direction:
-            if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
-                filled_sides[direction] = True
-        if (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT]):
-            base_value = float('inf')
     return base_value
 
 # calculate the distance from each box to the farthest objective
 def calculate_third_heuristic(grid, objective_positions, boxes_positions, player_position):
     base_value = 0
     for box in boxes_positions:
+        if is_box_in_corner(grid, box):
+            base_value = float('inf')
+            break
+
         max_distance = float('-inf')
         for obj in objective_positions:
             distance = abs(obj.row - box.row) + abs(obj.column - box.column)
@@ -312,7 +318,16 @@ def main():
                 arcade.run()
             else :
                 heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
-                explore_data = TreeData([Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))], 0, 1)
+                frontier = []
+                first_node = Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))
+                if config['algorithm'] == 'dfs':
+                    frontier.append(first_node)
+                elif config['algorithm'] == 'bfs':
+                    frontier = deque([first_node])
+                else:
+                    heapq.heappush(frontier, (sorting_options[config['algorithm']](first_node), 0, first_node))
+
+                explore_data = TreeData(frontier, 0, 1)
                 while not execute_step(grid_data, explore_data):
                     current_time = time.process_time()
                     if (current_time - last_time) > config["print_delta_time"]:
