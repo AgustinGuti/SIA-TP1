@@ -228,7 +228,18 @@ def algorithm_step(grid_data: GridData, data: TreeData):
 def is_solution(grid, boxes_positions):
     return all([grid[coordinate.row][coordinate.column] == GridElement.OBJECTIVE for coordinate in boxes_positions])
 
+
 def calculate_heuristic(grid, objective_positions, boxes_positions, player_position):
+    if config['heuristic'] == 1:
+        return calculate_first_heuristic(grid, objective_positions, boxes_positions, player_position)
+    elif config['heuristic'] == 2:
+        return calculate_second_heuristic(grid, objective_positions, boxes_positions, player_position)
+    elif config['heuristic'] == 3:
+        return calculate_third_heuristic(grid, objective_positions, boxes_positions, player_position)
+    else:
+        raise ValueError(f"Invalid heuristic: {config['heuristic']}. Allowed options are 1, 2 and 3.")
+
+def calculate_first_heuristic(grid, objective_positions, boxes_positions, player_position):
     base_value = sum([min([abs(obj.row - box.row) + abs(obj.column - box.column) for obj in objective_positions]) for box in boxes_positions])
     for box in boxes_positions:
         if grid[box.row][box.column] == GridElement.OBJECTIVE:
@@ -241,6 +252,45 @@ def calculate_heuristic(grid, objective_positions, boxes_positions, player_posit
             base_value = float('inf')
     return base_value
 
+def calculate_second_heuristic(grid, objective_positions, boxes_positions, player_position):
+    base_value = 0
+    objectives_assigned = [False for _ in objective_positions]
+
+    for box in boxes_positions:
+        min_distance = float('inf')
+        min_index = -1
+        for i, obj in enumerate(objective_positions):
+            if objectives_assigned[i]:
+                continue
+            distance = abs(obj.row - box.row) + abs(obj.column - box.column)
+            if distance < min_distance:
+                min_distance = distance
+                min_index = i
+        if min_index != -1:
+            objectives_assigned[min_index] = True
+        base_value += min_distance
+
+        if grid[box.row][box.column] == GridElement.OBJECTIVE:
+            continue
+        filled_sides = {direction: False for direction in Direction}
+        for direction in Direction:
+            if grid[box.row + direction.value[0]][box.column + direction.value[1]] == GridElement.FILLED:
+                filled_sides[direction] = True
+        if (filled_sides[Direction.UP] or filled_sides[Direction.DOWN]) and (filled_sides[Direction.RIGHT] or filled_sides[Direction.LEFT]):
+            base_value = float('inf')
+    return base_value
+
+# calculate the distance from each box to the farthest objective
+def calculate_third_heuristic(grid, objective_positions, boxes_positions, player_position):
+    base_value = 0
+    for box in boxes_positions:
+        max_distance = float('-inf')
+        for obj in objective_positions:
+            distance = abs(obj.row - box.row) + abs(obj.column - box.column)
+            if distance > max_distance:
+                max_distance = distance
+        base_value += max_distance
+    return base_value
 
 def main():
     with open('grid.json') as f:

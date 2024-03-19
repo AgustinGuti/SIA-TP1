@@ -1,8 +1,9 @@
 {
-    "algorithm": "a_star",
+    "algorithm": "greedy",
     "graphic": false,
     "replay": {
         "enabled": false,
         "speed": 0.1
-    }
+    },
+    "heuristic": 1
 }
