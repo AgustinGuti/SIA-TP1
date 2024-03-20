@@ -10,6 +10,7 @@ from datetime import datetime
 from collections import deque
 import heapq
 import glob
+import math
 
 # Define directions
 class Direction(Enum):    
@@ -42,6 +43,11 @@ HEIGHT = 30
 # and on the edges of the screen.
 MARGIN = 5
 
+HORIZONTAL_GRIDS_COUNT = 3
+
+MAX_HEIGHT = 1000
+MAX_WIDTH = 1600
+
 # Do the math to figure out our screen dimensions
 SCREEN_TITLE = "Sokoban"
 
@@ -59,29 +65,45 @@ sorting_options = {
 }
 
 class Sokoban(arcade.Window):
-    def __init__(self, title, grid_data: GridData, showcase=False, route=None):
-        if len(grid_data.grid) == 0:
-            raise ValueError("Initial grid cannot be empty")
-        
-        self.row_count = len(grid_data.grid)
-        self.column_count = len(grid_data.grid[0])
-        
-        width = (WIDTH + MARGIN) * self.column_count + MARGIN
-        height = (WIDTH + MARGIN) * self.row_count + MARGIN
+    def __init__(self, title, grid_datas: list, routes=[], grid_algorithms: list = [], close_on_finish=False):
+        global WIDTH, HEIGHT, MARGIN
 
-        self.paused = False
-
-        super().__init__(width, height, title)
-
-        # Create a 2 dimensional array. A two-dimensional
-        # array is simply a list of lists.
-        self.grid_data = grid_data
         self.time_since_last_move = 0
-        self.showcase = showcase
-        if showcase:
-            self.route = route
 
-        self.explore_data = initialize_tree(grid_data)
+        width = 0
+        height = 0
+        self.paused = False
+        self.close_on_finish = close_on_finish
+
+        if grid_datas and len(grid_datas) == 0:
+            raise ValueError("No grids to show")
+        for grid_data in grid_datas:
+            if len(grid_data.grid) == 0:
+                raise ValueError("Initial grid cannot be empty")
+        self.grids = grid_datas
+
+        self.routes = routes
+        self.max_grid_width = max([len(grid.grid[0]) for grid in grid_datas])
+        self.max_grid_height = max([len(grid.grid) for grid in grid_datas])
+        self.grid_algorithms = grid_algorithms
+        for grid_data in grid_datas:
+            self.grid_row_count = math.ceil(len(grid_datas)/HORIZONTAL_GRIDS_COUNT)
+
+        self.steps = [0 for _ in grid_datas]
+
+        horizontal_grids = min(HORIZONTAL_GRIDS_COUNT, len(grid_datas))
+        width = (WIDTH + MARGIN) * self.max_grid_width * horizontal_grids + MARGIN + WIDTH * (horizontal_grids - 1) + 5*WIDTH
+        height = (WIDTH + MARGIN) * self.max_grid_height * self.grid_row_count + MARGIN + HEIGHT * (self.grid_row_count)
+
+        while width > MAX_WIDTH or height > MAX_HEIGHT:
+            relation = min(MAX_WIDTH / width, MAX_HEIGHT / height)
+            WIDTH = int(WIDTH * relation)
+            HEIGHT = int(HEIGHT * relation)
+            MARGIN = int(MARGIN * relation)
+            width = (WIDTH + MARGIN) * self.max_grid_width * horizontal_grids + MARGIN + WIDTH * (horizontal_grids - 1) + 5*WIDTH
+            height = (WIDTH + MARGIN) * self.max_grid_height * self.grid_row_count + MARGIN + HEIGHT * (self.grid_row_count)
+        
+        super().__init__(width, height, title)
 
         self.step = 0
 
@@ -92,34 +114,48 @@ class Sokoban(arcade.Window):
         self.clear()
 
         # Draw the grid
-        for row in range(self.row_count):
-            for column in range(self.column_count):
-                # Figure out what color to draw the box
-        
-                if self.grid_data.player_position == Coordinate(row, column):
-                    color = arcade.color.RED
-                    shape = arcade.draw_circle_filled
-                elif self.grid_data.boxes_positions.count(Coordinate(row, column)) > 0:
-                    color = arcade.color.BLUE
-                    shape = arcade.draw_rectangle_filled
-                elif self.grid_data.grid[row][column] == GridElement.OBJECTIVE:
-                    color = arcade.color.GREEN
-                    shape = arcade.draw_rectangle_filled
-                elif self.grid_data.grid[row][column] == GridElement.FILLED:
-                    color = arcade.color.WHITE
-                    shape = arcade.draw_rectangle_filled
-                else:
-                    color = arcade.color.BLACK
-                    shape = arcade.draw_rectangle_filled
+        for i, grid in enumerate(self.grids):   
 
-                # Do the math to figure out where the box is
-                x = (MARGIN + WIDTH) * column + MARGIN + WIDTH // 2
-                y = self.height - ((MARGIN + HEIGHT) * row + MARGIN + HEIGHT // 2)
-                
-                if shape == arcade.draw_circle_filled:
-                    shape(x, y, WIDTH // 2, color)  # Draw a circle if the shape is a circle
-                else:
-                    shape(x, y, WIDTH, HEIGHT, color)  # Draw a rectangle otherwise        
+            if (i % HORIZONTAL_GRIDS_COUNT) == 0:
+                grid_height = (MARGIN + HEIGHT) * self.max_grid_height
+                text_y = self.height - (MARGIN + HEIGHT) * (self.max_grid_height+1) * ((i // HORIZONTAL_GRIDS_COUNT)+1) + grid_height / 2
+                text_x = WIDTH
+                arcade.draw_text(self.grid_algorithms[i], text_x, text_y, arcade.color.YELLOW, 14)
+
+            for row in range(len(grid.grid)):                    
+                for column in range(len(grid.grid[0])):
+                    # Figure out what color to draw the box
+                    if grid.player_position == Coordinate(row, column):
+                        color = arcade.color.RED
+                        shape = arcade.draw_circle_filled
+                    elif grid.boxes_positions.count(Coordinate(row, column)) > 0:
+                        color = arcade.color.BLUE
+                        shape = arcade.draw_rectangle_filled
+                    elif grid.grid[row][column] == GridElement.OBJECTIVE:
+                        color = arcade.color.GREEN
+                        shape = arcade.draw_rectangle_filled
+                    elif grid.grid[row][column] == GridElement.FILLED:
+                        color = arcade.color.WHITE
+                        shape = arcade.draw_rectangle_filled
+                    else:
+                        color = arcade.color.BLACK
+                        shape = arcade.draw_rectangle_filled
+
+                    grid_x_offset = (MARGIN + WIDTH) * self.max_grid_width * (i % HORIZONTAL_GRIDS_COUNT) + WIDTH * (i % HORIZONTAL_GRIDS_COUNT)
+                    grid_y_offset = (MARGIN + HEIGHT) * self.max_grid_height * (i // HORIZONTAL_GRIDS_COUNT) + HEIGHT * (i // HORIZONTAL_GRIDS_COUNT)
+
+                    # Do the math to figure out where the box is
+                    x = (MARGIN + WIDTH) * column + MARGIN + WIDTH // 2 + grid_x_offset + 5*WIDTH
+                    y = self.height - ((MARGIN + HEIGHT) * row + MARGIN + HEIGHT // 2 + grid_y_offset)
+                    height_diff = self.max_grid_height - len(grid.grid)
+                    y -= height_diff * (WIDTH + MARGIN) / 2
+                    width_diff = self.max_grid_width - len(grid.grid[0])
+                    x += width_diff * (WIDTH + MARGIN) / 2
+
+                    if shape == arcade.draw_circle_filled:
+                        shape(x, y, WIDTH // 2, color)  
+                    else:
+                        shape(x, y, WIDTH, HEIGHT, color)
 
     def update(self, delta_time):
         if self.paused:
@@ -132,20 +168,20 @@ class Sokoban(arcade.Window):
 
         if self.time_since_last_move >= move_delta:
 
-            if not self.showcase:
-                if execute_step(self.grid_data, self.explore_data):
-                    self.paused = True
-                    return
-            else:
-                if self.step < len(self.route):
-                    result = move_player(Direction[self.route[self.step]], self.grid_data)
-                    self.grid_data.player_position = result.new_position
-                    self.grid_data.boxes_positions = result.boxes_positions
-                    self.step += 1
+            finished_count = 0
+            for i, grid_data in enumerate(self.grids):
+                if self.steps[i] < len(self.routes[i]):
+                    result = move_player(Direction[self.routes[i][self.steps[i]]], grid_data)
+                    grid_data.player_position = result.new_position
+                    grid_data.boxes_positions = result.boxes_positions
+                    self.steps[i] += 1
                 else:
-                    self.paused = True
+                    finished_count += 1
+            if finished_count == len(self.grids):
+                self.paused = True
+                if self.close_on_finish:
                     arcade.close_window()
-                    return
+                return
 
             self.time_since_last_move = 0
 
@@ -335,15 +371,33 @@ def initialize_tree(grid_data: GridData):
 
 def main():
 
-    if config["graphic"]:
-        if config["replay"]["enabled"]:
-            for filename in glob.glob(config["replay"]["path"]):
-                with open(filename) as f:
-                    grid = json.load(f)
-                    grid_data = load_grid(grid)
-                screen_title = f"Sokoban - {grid['name']} - {grid['algorithm']}"
-                Sokoban(screen_title, grid_data, config["replay"]["enabled"], grid["route"])
+    if config["replay"]["enabled"]:
+        grid_datas = []
+        routes = []
+        grid_algorithms = []
+        filenames = []
+        for path in config["replay"]["paths"]:
+            filenames.extend(glob.glob(path))
+        for filename in filenames:
+            with open(filename) as f:
+                grid = json.load(f)
+                grid_datas.append(load_grid(grid))
+                routes.append(grid["route"])
+                grid_algorithms.append(grid["algorithm"])
+        
+        combined = list(zip(grid_algorithms, grid_datas, routes))
+        combined.sort()
+        grid_algorithms, grid_datas, routes = zip(*combined)
+
+        if config["replay"]["sequential"]:
+            for i, grid in enumerate(grid_datas):
+                screen_title = f"Sokoban - {grid_algorithms[i]}"
+                Sokoban(screen_title, [grid], [routes[i]], [grid_algorithms[i]], i != len(grid_datas) - 1)
                 arcade.run()
+        else:
+            screen_title = f"Sokoban"
+            Sokoban(screen_title, grid_datas, routes, grid_algorithms)
+            arcade.run()
     else:
         log_filename = f"log_{config['algorithm']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
@@ -353,18 +407,13 @@ def main():
                 start_time = time.process_time()
                 last_time = start_time
                 grid_data = load_grid(grid)
-                if config["graphic"]:
-                    if not config["replay"]["enabled"]:
-                        Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
-                        arcade.run()                    
-                else:
-                    explore_data = initialize_tree(grid_data)
-                    while not execute_step(grid_data, explore_data):
-                        current_time = time.process_time()
-                        if (current_time - last_time) > config["print_delta_time"]:
-                            print(f"Time: {current_time - start_time:.2f}")
-                            last_time = current_time
-                        pass
+                explore_data = initialize_tree(grid_data)
+                while not execute_step(grid_data, explore_data):
+                    current_time = time.process_time()
+                    if (current_time - last_time) > config["print_delta_time"]:
+                        print(f"Time: {current_time - start_time:.2f}")
+                        last_time = current_time
+                    pass
                 print(f"Time: {time.process_time() - start_time:.2f}")
                 logging.info(f"Time: {time.process_time() - start_time:.2f}")
                 print("---------------------------------------------------")

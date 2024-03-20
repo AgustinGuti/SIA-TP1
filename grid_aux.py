@@ -70,6 +70,9 @@ class GridData:
                     string += " "
             grid.append(string)
         return grid
+    
+    def __lt__(self, other):
+        return self.name < other.name
         
 
 def validate_grid(grid_data):
