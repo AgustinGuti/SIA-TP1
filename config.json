@@ -1,10 +1,11 @@
 {
-    "algorithm": "greedy",
+    "algorithm": "a_star",
     "graphic": false,
     "print_delta_time": 30,
     "replay": {
-        "enabled": false,
-        "speed": 0.1
+        "enabled": true,
+        "speed": 0.05,
+        "path": "replay_*_*.json"
     },
     "heuristic": 2
 }

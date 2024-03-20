@@ -50,37 +50,33 @@ class GridData:
     def copy(self):
         return GridData(self.grid, self.player_position, self.boxes_positions, self.objective_positions, self.name)
     
-    def __str__(self) -> str:
-        string = ""
-        for row in self.grid:
-            for cell in row:
-                if self.player_position == cell:
+    def original(self, player_position, boxes_positions):
+        grid = []
+        for i, row in enumerate(self.grid):
+            string=""
+            for j, cell in enumerate(row):
+                if player_position.row == i and player_position.column == j:
                     string += "@"
-                elif cell in self.boxes_positions:
-                    string += "$"
-                elif cell == GridElement.OBJECTIVE:
+                elif any(i == box.row and j == box.column for box in boxes_positions):
+                    if self.grid[i][j] == GridElement.OBJECTIVE:
+                        string += ":"
+                    else:
+                        string += "$"
+                elif self.grid[i][j] == GridElement.OBJECTIVE:
                     string += "."
-                elif cell == GridElement.FILLED:
+                elif self.grid[i][j] == GridElement.FILLED:
                     string += "#"
                 else:
                     string += " "
-            string += "\n"
-        return string
+            grid.append(string)
+        return grid
+        
 
 def validate_grid(grid_data):
     row_count = len(grid_data.grid)
     if row_count == 0:
-        raise ValueError("Grid cannot be empty")
-    column_count = len(grid_data.grid[0])
-    objective_count = 0
-    for row in range(len(grid_data.grid)):
-        if len(grid_data.grid[row]) != column_count:
-            raise ValueError("All rows in the grid must have the same length")
-        for column in range(len(grid_data.grid[0])):
-            if grid_data.grid[row][column] == GridElement.OBJECTIVE:
-                objective_count += 1
-    
-    if objective_count != grid_data.boxes_positions.count:
+        raise ValueError("Grid cannot be empty")    
+    if len(grid_data.objective_positions) != len(grid_data.boxes_positions):
         raise ValueError("There must be the same number of objectives as boxes in the grid")
     return True
 
@@ -97,9 +93,13 @@ def load_grid(data):
             elif char == '@':
                 player_position = Coordinate(len(grid), len(row))
                 row.append(GridElement.EMPTY)
-            elif char == '.':
-                row.append(GridElement.OBJECTIVE)
+            elif char == ':':
                 objectives_positions.append(Coordinate(len(grid), len(row)))
+                boxes_positions.append(Coordinate(len(grid), len(row)))
+                row.append(GridElement.OBJECTIVE)
+            elif char == '.':
+                objectives_positions.append(Coordinate(len(grid), len(row)))
+                row.append(GridElement.OBJECTIVE)
             elif char == '$':
                 boxes_positions.append(Coordinate(len(grid), len(row)))
                 row.append(GridElement.EMPTY)
@@ -107,5 +107,5 @@ def load_grid(data):
                 row.append(GridElement.EMPTY)
         grid.append(row)
     data = GridData(grid, player_position, boxes_positions, objectives_positions, data['name'])
-    # validate_grid(data)
+    validate_grid(data)
     return data

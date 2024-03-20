@@ -9,8 +9,7 @@ import logging
 from datetime import datetime
 from collections import deque
 import heapq
-from collections import deque
-import heapq
+import glob
 
 # Define directions
 class Direction(Enum):    
@@ -60,7 +59,7 @@ sorting_options = {
 }
 
 class Sokoban(arcade.Window):
-    def __init__(self, title, grid_data: GridData, showcase=False):
+    def __init__(self, title, grid_data: GridData, showcase=False, route=None):
         if len(grid_data.grid) == 0:
             raise ValueError("Initial grid cannot be empty")
         
@@ -79,6 +78,8 @@ class Sokoban(arcade.Window):
         self.grid_data = grid_data
         self.time_since_last_move = 0
         self.showcase = showcase
+        if showcase:
+            self.route = route
 
         self.explore_data = initialize_tree(grid_data)
 
@@ -136,13 +137,15 @@ class Sokoban(arcade.Window):
                     self.paused = True
                     return
             else:
-                with open('route.json') as f:
-                    route = json.load(f)
-                    if self.step < len(route):
-                        result = move_player(Direction[route[self.step]], self.grid_data)
-                        self.grid_data.player_position = result.new_position
-                        self.grid_data.boxes_positions = result.boxes_positions
-                        self.step += 1
+                if self.step < len(self.route):
+                    result = move_player(Direction[self.route[self.step]], self.grid_data)
+                    self.grid_data.player_position = result.new_position
+                    self.grid_data.boxes_positions = result.boxes_positions
+                    self.step += 1
+                else:
+                    self.paused = True
+                    arcade.close_window()
+                    return
 
             self.time_since_last_move = 0
 
@@ -160,7 +163,7 @@ def can_move_into_cell(direction, grid_data: GridData, current_position: Coordin
 # Move the player. Checks if the player can move into a cell and if there is a box in the cell, if the box can be moved
 # Returns a MoveResult with the new position and the new boxes positions, and a boolean indicating if the player moved
 def move_player(direction: Direction, grid_data: GridData): 
-    new_position = grid_data.player_position.copy().move(direction.value)
+    new_position = grid_data.player_position.move(direction.value)
     if can_move_into_cell(direction, grid_data, grid_data.player_position):
         return MoveResult(True, new_position, grid_data.boxes_positions)
     elif grid_data.boxes_positions.count(new_position) > 0:
@@ -196,8 +199,16 @@ def execute_step(grid_data: GridData, data: TreeData):
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
         logging.info(route[::-1])
-        with open('route.json', 'w') as f:
-            json.dump(route[::-1], f)
+
+        filename = f"replay_{grid_data.name}_{config['algorithm']}.json"
+        json_data = {
+            "grid": grid_data.original(new_position.value.player_position, new_position.value.boxes_positions),
+            "name": grid_data.name,
+            "route": route[::-1],
+            "algorithm": config['algorithm']
+        }
+        with open(filename, 'w') as f:
+            json.dump(json_data, f)
         return True
     
     if data.frontier == []:
@@ -217,11 +228,15 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     if is_solution(grid_data.grid, node.value.boxes_positions):
         return node, True
     
-    explore_node(node, grid_data)
+    aux_grid_data = grid_data.copy()
+    aux_grid_data.player_position = node.value.player_position
+    aux_grid_data.boxes_positions = node.value.boxes_positions
+    
+    explore_node(node, aux_grid_data)
     data.expanded_node_count += 1
     data.frontier_node_count -= 1
     for child in node.children:
-        if child not in data.visited:  # Check if state has been visited
+        if child not in data.visited and child.value.heuristic < float('inf'):  # Check if state has been visited ans is viable
             if config['algorithm'] == 'dfs':
                 data.frontier.append(child)
             elif config['algorithm'] == 'bfs':
@@ -319,30 +334,41 @@ def initialize_tree(grid_data: GridData):
     return explore_data
 
 def main():
-    log_filename = f"log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
 
-    with open('grid.json') as f:
-        grids = json.load(f)['active']
-        for grid in grids:
-            start_time = time.process_time()
-            last_time = start_time
-            grid_data = load_grid(grid)
-            if config["graphic"]:
-                Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
+    if config["graphic"]:
+        if config["replay"]["enabled"]:
+            for filename in glob.glob(config["replay"]["path"]):
+                with open(filename) as f:
+                    grid = json.load(f)
+                    grid_data = load_grid(grid)
+                screen_title = f"Sokoban - {grid['name']} - {grid['algorithm']}"
+                Sokoban(screen_title, grid_data, config["replay"]["enabled"], grid["route"])
                 arcade.run()
-            else :
-                explore_data = initialize_tree(grid_data)
-                while not execute_step(grid_data, explore_data):
-                    current_time = time.process_time()
-                    if (current_time - last_time) > config["print_delta_time"]:
-                        print(f"Time: {current_time - start_time:.2f}")
-                        last_time = current_time
-                    pass
-            print(f"Time: {time.process_time() - start_time:.2f}")
-            logging.info(f"Time: {time.process_time() - start_time:.2f}")
-            print("---------------------------------------------------")
-            logging.info("---------------------------------------------------")
+    else:
+        log_filename = f"log_{config['algorithm']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
+        with open('grid.json') as f:
+            grids = json.load(f)['active']
+            for grid in grids:
+                start_time = time.process_time()
+                last_time = start_time
+                grid_data = load_grid(grid)
+                if config["graphic"]:
+                    if not config["replay"]["enabled"]:
+                        Sokoban(SCREEN_TITLE, grid_data, config["replay"]["enabled"])
+                        arcade.run()                    
+                else:
+                    explore_data = initialize_tree(grid_data)
+                    while not execute_step(grid_data, explore_data):
+                        current_time = time.process_time()
+                        if (current_time - last_time) > config["print_delta_time"]:
+                            print(f"Time: {current_time - start_time:.2f}")
+                            last_time = current_time
+                        pass
+                print(f"Time: {time.process_time() - start_time:.2f}")
+                logging.info(f"Time: {time.process_time() - start_time:.2f}")
+                print("---------------------------------------------------")
+                logging.info("---------------------------------------------------")
 
 
 if __name__ == "__main__":

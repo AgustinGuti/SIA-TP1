@@ -14,7 +14,7 @@ class NodeValue:
         return hash((self.player_position, tuple(sorted(self.boxes_positions))))
 
     def __str__(self) -> str:
-        return f"Player: {self.player_position}, Boxes: {self.boxes_positions}, Heuristic: {self.heuristic}, Depth: {self.depth}"
+        return f"{self.direction.name if self.direction else 'Start'} - Player: {self.player_position}, Boxes: {self.boxes_positions}, Heuristic: {self.heuristic}, Depth: {self.depth}"
     
     def __lt__(self, other):
         return self.heuristic < other.heuristic
