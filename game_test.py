@@ -9,6 +9,8 @@ import logging
 from datetime import datetime
 from collections import deque
 import heapq
+from collections import deque
+import heapq
 
 # Define directions
 class Direction(Enum):    
