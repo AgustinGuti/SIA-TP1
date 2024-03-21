@@ -2,11 +2,11 @@
     "algorithm": "bfs",
     "print_delta_time": 30,
     "replay": {
-        "enabled": false,
-        "speed": 0.2,
+        "enabled": true,
+        "speed": 0.05,
         "sequential": false,
         "paths": [
-            "./results/replay_*_*.json"
+            "./results/replay_D_*.json"
         ]
     },
     "heuristic": 3
