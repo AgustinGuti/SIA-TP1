@@ -11,6 +11,7 @@ from collections import deque
 import heapq
 import glob
 import math
+import os
 
 # Define directions
 class Direction(Enum):    
@@ -25,6 +26,7 @@ class TreeData:
     def __init__(self, frontier, expanded_node_count, frontier_node_count):
         self.expanded_node_count = expanded_node_count
         self.frontier_node_count = frontier_node_count
+        self.start_time = time.process_time()
         self.frontier = frontier
         self.visited = set()
 
@@ -60,7 +62,7 @@ if config['algorithm'] not in allowed_algorithms:
 
 sorting_options = {
     'bfs': None,
-    'a_star': lambda x: (x.value.heuristic + x.value.depth/5, x.value.heuristic), # TODO preguntar, demasiado peso al depth? Se puede cambiar?
+    'a_star': lambda x: (x.value.heuristic + x.value.depth, x.value.heuristic),
     'greedy': lambda x: x.value.heuristic
 }
 
@@ -231,24 +233,37 @@ def execute_step(grid_data: GridData, data: TreeData):
         print(message)
         logging.info(message)
         route = []
+        depth = new_position.value.depth
         while new_position.parent:
             route.append(new_position.value.direction.name)
             new_position = new_position.parent
         logging.info(route[::-1])
 
-        filename = f"replay_{grid_data.name}_{config['algorithm']}.json"
+        filename = f"./results/replay_{grid_data.name}_{config['algorithm']}_{config['heuristic']}.json"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+
         json_data = {
             "grid": grid_data.original(new_position.value.player_position, new_position.value.boxes_positions),
             "name": grid_data.name,
             "route": route[::-1],
-            "algorithm": config['algorithm']
+            "algorithm": config['algorithm'],
+            "cost": depth,
+            "expanded_nodes": data.expanded_node_count,
+            "frontier_nodes": data.frontier_node_count,
+            "time": time.process_time() - data.start_time,
+            "heuristic": config['heuristic']
         }
         with open(filename, 'w') as f:
             json.dump(json_data, f)
         return True
     
-    if data.frontier == []:
+    if data.frontier_node_count == 0:
+        print(f"Expanded nodes: {data.expanded_node_count}, Frontier nodes: {data.frontier_node_count}")
         print("No solution found")
+        while new_position.parent:
+            new_position = new_position.parent
+        with open("tree.txt", 'w') as f:
+            f.write(str(new_position))
         return True
 
     return False
@@ -399,7 +414,8 @@ def main():
             Sokoban(screen_title, grid_datas, routes, grid_algorithms)
             arcade.run()
     else:
-        log_filename = f"log_{config['algorithm']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        log_filename = f"./logs/log_{config['algorithm']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        os.makedirs(os.path.dirname(log_filename), exist_ok=True)
         logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
         with open('grid.json') as f:
             grids = json.load(f)['active']

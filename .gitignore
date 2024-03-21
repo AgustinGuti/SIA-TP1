@@ -169,3 +169,5 @@ my_venv/
 route.json
 log*.txt
 replay*.json
+results/
+logs/

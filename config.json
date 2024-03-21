@@ -1,13 +1,13 @@
 {
-    "algorithm": "greedy",
+    "algorithm": "bfs",
     "print_delta_time": 30,
     "replay": {
-        "enabled": true,
-        "speed": 0.05,
+        "enabled": false,
+        "speed": 0.2,
         "sequential": false,
         "paths": [
-            "replay_*_*.json"
+            "./results/replay_*_*.json"
         ]
     },
-    "heuristic": 2
+    "heuristic": 3
 }
