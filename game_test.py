@@ -12,6 +12,7 @@ import heapq
 import glob
 import math
 import os
+from multiprocessing import Pool
 
 # Define directions
 class Direction(Enum):    
@@ -23,12 +24,13 @@ class Direction(Enum):
 MoveResult = namedtuple('MoveResult', ['moved', 'new_position', 'boxes_positions'])
 
 class TreeData:
-    def __init__(self, frontier, expanded_node_count, frontier_node_count):
+    def __init__(self, frontier, expanded_node_count, frontier_node_count, algorithm):
         self.expanded_node_count = expanded_node_count
         self.frontier_node_count = frontier_node_count
         self.start_time = time.process_time()
         self.frontier = frontier
         self.visited = set()
+        self.algorithm = algorithm
 
     def __str__(self) -> str:
         return f"Expanded nodes: {self.expanded_node_count}, Frontier nodes: {self.frontier_node_count}"
@@ -57,8 +59,8 @@ with open('config.json') as f:
     config = json.load(f)
 
 allowed_algorithms = ['bfs', 'dfs', 'a_star', 'greedy']
-if config['algorithm'] not in allowed_algorithms:
-    raise ValueError(f"Invalid algorithm: {config['algorithm']}. Allowed options are {allowed_algorithms}.")
+if not set(config['algorithms']).issubset(set(allowed_algorithms)):
+    raise ValueError(f"Invalid algorithms. Allowed options are {allowed_algorithms}.")
 
 sorting_options = {
     'bfs': None,
@@ -229,7 +231,7 @@ def execute_step(grid_data: GridData, data: TreeData):
     grid_data.boxes_positions = new_position.value.boxes_positions
 
     if step_result[1]:
-        message = f"Grid: {grid_data.name}\nSolution found with '{config['algorithm']}' algorithm and heuristic {config['heuristic']}\n{data}\nRoute depth: {new_position.value.depth}"
+        message = f"Grid: {grid_data.name}\nSolution found with '{data.algorithm}' algorithm and heuristic {config['heuristic']}\n{data}\nRoute depth: {new_position.value.depth}"
         print(message)
         logging.info(message)
         route = []
@@ -239,14 +241,14 @@ def execute_step(grid_data: GridData, data: TreeData):
             new_position = new_position.parent
         logging.info(route[::-1])
 
-        filename = f"./results/replay_{grid_data.name}_{config['algorithm']}_{config['heuristic']}.json"
+        filename = f"./results/replay_{grid_data.name}_{data.algorithm}_{config['heuristic']}.json"
         os.makedirs(os.path.dirname(filename), exist_ok=True)
 
         json_data = {
             "grid": grid_data.original(new_position.value.player_position, new_position.value.boxes_positions),
             "name": grid_data.name,
             "route": route[::-1],
-            "algorithm": config['algorithm'],
+            "algorithm": data.algorithm,
             "cost": depth,
             "expanded_nodes": data.expanded_node_count,
             "frontier_nodes": data.frontier_node_count,
@@ -269,9 +271,9 @@ def execute_step(grid_data: GridData, data: TreeData):
     return False
     
 def algorithm_step(grid_data: GridData, data: TreeData):
-    if config['algorithm'] == 'dfs':
+    if data.algorithm == 'dfs':
         node = data.frontier.pop()
-    elif config['algorithm'] == 'bfs':
+    elif data.algorithm == 'bfs':
         node = data.frontier.popleft()
     else:
         _, _, node = heapq.heappop(data.frontier)
@@ -288,12 +290,12 @@ def algorithm_step(grid_data: GridData, data: TreeData):
     data.frontier_node_count -= 1
     for child in node.children:
         if child not in data.visited and child.value.heuristic < float('inf'):  # Check if state has been visited ans is viable
-            if config['algorithm'] == 'dfs':
+            if data.algorithm == 'dfs':
                 data.frontier.append(child)
-            elif config['algorithm'] == 'bfs':
+            elif data.algorithm == 'bfs':
                 data.frontier.append(child)
             else:
-                heapq.heappush(data.frontier, (sorting_options[config['algorithm']](child), data.expanded_node_count, child))
+                heapq.heappush(data.frontier, (sorting_options[data.algorithm](child), data.expanded_node_count, child))
             data.frontier_node_count += 1                
             data.visited.add(child)  # Add state to visited set
 
@@ -370,22 +372,45 @@ def calculate_third_heuristic(grid, objective_positions, boxes_positions, player
         base_value += max_distance
     return base_value
 
-def initialize_tree(grid_data: GridData):
+def initialize_tree(grid_data: GridData, algorithm: str):
     heuristic = calculate_heuristic(grid_data.grid, grid_data.objective_positions, grid_data.boxes_positions, grid_data.player_position)
     frontier = []
     first_node = Node(NodeValue(grid_data.player_position, grid_data.boxes_positions, None, heuristic, 0))
-    if config['algorithm'] == 'dfs':
+    if algorithm == 'dfs':
         frontier.append(first_node)
-    elif config['algorithm'] == 'bfs':
+    elif algorithm == 'bfs':
         frontier = deque([first_node])
     else:
-        heapq.heappush(frontier, (sorting_options[config['algorithm']](first_node), 0, first_node))
+        heapq.heappush(frontier, (sorting_options[algorithm](first_node), 0, first_node))
 
-    explore_data = TreeData(frontier, 0, 1)
+    explore_data = TreeData(frontier, 0, 1, algorithm)
     return explore_data
 
-def main():
+def run_algorithm(algorithm):
+    log_filename = f"./logs/log_{algorithm}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+    logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
+    with open('grid.json') as f:
+        grids = json.load(f)['active']
+        for grid in grids:
+            start_time = time.process_time()
+            last_time = start_time
+            grid_data = load_grid(grid)
+            explore_data = initialize_tree(grid_data, algorithm)
+            while not execute_step(grid_data, explore_data):
+                current_time = time.process_time()
+                if (current_time - last_time) > config["print_delta_time"]:
+                    print(f"Time: {current_time - start_time:.2f}")
+                    last_time = current_time
+                pass
+            print(f"Time: {time.process_time() - start_time:.2f}")
+            logging.info(f"Time: {time.process_time() - start_time:.2f}")
+            print("---------------------------------------------------")
+            logging.info("---------------------------------------------------")
 
+
+
+def main():
     if config["replay"]["enabled"]:
         grid_datas = []
         routes = []
@@ -414,26 +439,11 @@ def main():
             Sokoban(screen_title, grid_datas, routes, grid_algorithms)
             arcade.run()
     else:
-        log_filename = f"./logs/log_{config['algorithm']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-        logging.basicConfig(filename=log_filename, level=logging.INFO, filemode='w', format='%(message)s')
-        with open('grid.json') as f:
-            grids = json.load(f)['active']
-            for grid in grids:
-                start_time = time.process_time()
-                last_time = start_time
-                grid_data = load_grid(grid)
-                explore_data = initialize_tree(grid_data)
-                while not execute_step(grid_data, explore_data):
-                    current_time = time.process_time()
-                    if (current_time - last_time) > config["print_delta_time"]:
-                        print(f"Time: {current_time - start_time:.2f}")
-                        last_time = current_time
-                    pass
-                print(f"Time: {time.process_time() - start_time:.2f}")
-                logging.info(f"Time: {time.process_time() - start_time:.2f}")
-                print("---------------------------------------------------")
-                logging.info("---------------------------------------------------")
+        # Use a ThreadPoolExecutor to run the tasks in parallel
+        for heuristic in [1, 2, 3]:
+            config['heuristic'] = heuristic
+            with Pool() as p:
+                p.map(run_algorithm, config["algorithms"])
 
 
 if __name__ == "__main__":

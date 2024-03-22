@@ -1,13 +1,18 @@
 {
-    "algorithm": "bfs",
+    "algorithms": [
+        "dfs",
+        "bfs",
+        "a_star",
+        "greedy"
+    ],
     "print_delta_time": 30,
     "replay": {
         "enabled": true,
         "speed": 0.05,
         "sequential": false,
         "paths": [
-            "./results/replay_D_*.json"
+            "./results/replay*.json"
         ]
     },
-    "heuristic": 3
+    "heuristic": 1
 }
