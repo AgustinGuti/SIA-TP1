@@ -241,7 +241,11 @@ def execute_step(grid_data: GridData, data: TreeData):
             new_position = new_position.parent
         logging.info(route[::-1])
 
-        filename = f"./results/replay_{grid_data.name}_{data.algorithm}_{config['heuristic']}.json"
+        i = 0
+        filename = f"./results/replay_{grid_data.name}_{data.algorithm}_{config['heuristic']}_{i}.json"
+        while os.path.exists(filename):
+            i += 1
+            filename = f"./results/replay_{grid_data.name}_{data.algorithm}_{config['heuristic']}_{i}.json"
         os.makedirs(os.path.dirname(filename), exist_ok=True)
 
         json_data = {
@@ -440,8 +444,7 @@ def main():
             arcade.run()
     else:
         # Use a ThreadPoolExecutor to run the tasks in parallel
-        for heuristic in [1, 2, 3]:
-            config['heuristic'] = heuristic
+        for _ in range(config['repetitions']):
             with Pool() as p:
                 p.map(run_algorithm, config["algorithms"])
 

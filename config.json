@@ -1,18 +1,19 @@
 {
     "algorithms": [
-        "dfs",
         "bfs",
+        "dfs",
         "a_star",
         "greedy"
     ],
     "print_delta_time": 30,
     "replay": {
-        "enabled": true,
+        "enabled": false,
         "speed": 0.05,
         "sequential": false,
         "paths": [
             "./results/replay*.json"
         ]
     },
-    "heuristic": 1
+    "heuristic": 3,
+    "repetitions": 5
 }

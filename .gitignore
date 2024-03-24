@@ -169,5 +169,7 @@ my_venv/
 route.json
 log*.txt
 replay*.json
-results/
+results*
+images/
 logs/
+data.csv
