@@ -72,10 +72,6 @@ def main():
     filtered = df[df['heuristic'] == 2]
     grouped = filtered.groupby(['algorithm'])
 
-    # data = df[df['heuristic'] == 2]
-    # with open("data.csv", "w") as f:
-    #     f.write(data.to_csv(index=False))
-
     fig, ax = plt.subplots()
     for algorithm in algorithms:
         plt.errorbar(filtered[filtered['algorithm'] == algorithm]['cost_relative'].mean(), 
@@ -96,6 +92,14 @@ def main():
     plt.ylabel('Nodos en frontera relativos')
     plt.title('Promedio de nodos en frontera relativos al resolver el problema en todos los mapas')
     plt.savefig('images/frontier_nodes_average.png')
+
+    plt.figure()
+    mean = grouped['expanded_nodes_relative'].mean()
+    plt.errorbar(mean.index, mean, fmt='o', capsize=6)
+    plt.ylabel('Nodos expandidos relativos')
+    plt.title('Promedio de nodos expandidos relativos al resolver el problema en todos los mapas')
+    plt.savefig('images/expanded_nodes_average.png')
+
     
     k = 1
     m = 1

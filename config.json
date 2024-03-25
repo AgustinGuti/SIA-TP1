@@ -6,6 +6,8 @@
         "greedy"
     ],
     "print_delta_time": 30,
+    "heuristic": 2,
+    "repetitions": 5,
     "replay": {
         "enabled": false,
         "speed": 0.05,
@@ -13,7 +15,5 @@
         "paths": [
             "./results/replay*.json"
         ]
-    },
-    "heuristic": 3,
-    "repetitions": 5
+    }
 }
