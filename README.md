@@ -7,8 +7,8 @@ Alumnos: Agustín Andrés Gutiérrez, Ian Bernasconi y Jeremías Demián Feferov
 ## Set up
 Para ejecutar el motor de busquedas:
 1. Instalación de librerias
-   
-```pip install -r ./requirements.txt```
+ - ```pip install -r ./requirements.txt```
+ - Correr `sudo apt-get install python3-tk` para instalar dependencias necesarias
 
 1. Configuracion de mapas. Archivo `grid.json`
     - Se pueden especificar los mapas a resolver en una lista del atributo `active`, bajo elementos con el atributo `grid` como un arreglo de strings. Dentro de los strings, el `#` representa un obstaculo, el ` ` un espacio vacio, el `.` un objetivo, el `@` al jugador, el `$` a una caja y `:` a un objetivo con una caja arriba. Tambien requieren un atributo `name` para cada mapa.
